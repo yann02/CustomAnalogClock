@@ -4,9 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
+import android.graphics.*
 import android.graphics.Paint.ANTI_ALIAS_FLAG
 import android.text.format.DateUtils
 import android.util.AttributeSet
@@ -14,6 +12,7 @@ import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.content.ContextCompat
 import java.util.*
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 
 const val ARC_LENGTH = Math.PI * 2
@@ -29,9 +28,9 @@ class BizAnalogClock(context: Context, att: AttributeSet) : AppCompatImageView(c
     private var mSecond: Int = 0
 
     private var mHandHourLength = 90f  //  时针长度
-    private var mHandMinuteLength = 110f  //  分针长度
-    private var mThinHandHourLength = 30f  //  细针的长度
-    private var mOverHandSecondLength = 20f  //  秒针超出圆心部分的长度
+    private var mHandMinuteLength = 0f  //  分针长度
+    private var mThinHandHourLength = 0f  //  细针的长度
+    private var mOverHandSecondLength = 0f  //  秒针超出圆心部分的长度
 
 
     init {
@@ -58,22 +57,30 @@ class BizAnalogClock(context: Context, att: AttributeSet) : AppCompatImageView(c
     }
 
     private fun onTimeChanged() {
+        updateTime()
+        invalidate()
+    }
+
+    private fun updateTime() {
         mTime.timeInMillis = System.currentTimeMillis()
         mHour = mTime[Calendar.HOUR]
         mMinute = mTime[Calendar.MINUTE]
         mSecond = mTime[Calendar.SECOND]
-        invalidate()
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        registerTimeChangeReceiver()
+        onTimeChanged()
+        mClockTick.run()
+    }
+
+    private fun registerTimeChangeReceiver() {
         val filter = IntentFilter()
         filter.addAction(Intent.ACTION_TIME_TICK)
         filter.addAction(Intent.ACTION_TIME_CHANGED)
         filter.addAction(Intent.ACTION_TIMEZONE_CHANGED)
         context.registerReceiver(mIntentReceiver, filter)
-        onTimeChanged()
-        mClockTick.run()
     }
 
     override fun onDetachedFromWindow() {
@@ -84,28 +91,46 @@ class BizAnalogClock(context: Context, att: AttributeSet) : AppCompatImageView(c
 
     private var mCenterX: Float = 0f
     private var mCenterY: Float = 0f
+    private var mRadius: Float = 0f
+    private val mRectF: RectF = RectF()
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         mCenterX = w / 2f
         mCenterY = h / 2f
+        mRadius = min(w, h) / 2f
+        mHandMinuteLength = mRadius - 15
+        mHandHourLength = mHandMinuteLength / 2 + 6
+        mThinHandHourLength = mHandHourLength / 3
+        mOverHandSecondLength = mThinHandHourLength
+        mRectF.apply {
+            left = mCenterX - 5.5f
+            top = mCenterY - 5.5f
+            right = mCenterX + 5.5f
+            bottom = mCenterY + 5.5f
+        }
     }
 
-    private val mPaint = Paint(ANTI_ALIAS_FLAG).apply {
+    private val mAntiPaint = Paint(ANTI_ALIAS_FLAG)
+    private val mWhitePaint = Paint(mAntiPaint).apply {
         color = Color.WHITE
-        strokeWidth = 15f
+    }
+
+    private val mPaint = Paint(mWhitePaint).apply {
+        strokeWidth = 9.3f
         strokeCap = Paint.Cap.ROUND
     }
 
-    private val mThinPaint = Paint(ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        strokeWidth = 8f
+    private val mThinPaint = Paint(mWhitePaint).apply {
+        strokeWidth = 4f
     }
 
     private val mSecondPaint = Paint(ANTI_ALIAS_FLAG).apply {
         color = Color.RED
-        strokeWidth = 4f
+        strokeWidth = 3f
     }
+
+    private val centerCircleBitmap = BitmapFactory.decodeResource(resources, R.mipmap.clock_center)
 
 
     override fun onDraw(canvas: Canvas?) {
@@ -119,7 +144,7 @@ class BizAnalogClock(context: Context, att: AttributeSet) : AppCompatImageView(c
     }
 
     private fun drawInnerCircle(canvas: Canvas) {
-
+        canvas.drawBitmap(centerCircleBitmap, null, mRectF, mAntiPaint)
     }
 
     private fun drawHandSecond(canvas: Canvas) {
